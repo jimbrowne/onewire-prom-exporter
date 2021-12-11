@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
 	"regexp"
@@ -32,6 +33,7 @@ var (
 	listenAddress       = flag.String("web.listen-address", ":8105", "Address and port to expose metrics")
 	metricsPath         = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 	jsonMetricsPath     = flag.String("web.json-path", "/json", "Path under which to expose json metrics.")
+	enableFahrenheit    = flag.Bool("export.fahrenheit", false, "Include Fahrenheit in export.")
 	onewireTemperatureC = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "onewire_temperature_c",
@@ -42,6 +44,7 @@ var (
 			"hostname",
 		},
 	)
+	onewireTemperatureF *prometheus.GaugeVec
 )
 
 func init() {
@@ -58,6 +61,20 @@ func init() {
 	flag.Parse()
 	// Registers temperature gauges
 	prometheus.MustRegister(onewireTemperatureC)
+	if *enableFahrenheit {
+		onewireTemperatureF = prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "onewire_temperature_f",
+				Help: "Onewire Temperature Sensor Value in Fahrenheit.",
+			},
+			[]string{
+				"device_id",
+				"hostname",
+			},
+		)
+
+		prometheus.MustRegister(onewireTemperatureF)
+	}
 }
 
 func main() {
@@ -105,8 +122,19 @@ func observeOnewireTemperature() {
 			if err != nil {
 				log.WithFields(log.Fields{"deviceID": deviceID}).Error("Error reading from device")
 			}
-			log.WithFields(log.Fields{"deviceID": deviceID, "value": value, "hostname": hostname}).Info("Value read from device")
+
+			fahrenheit := math.Round((value*1.8+32)*100) / 100
+			if *enableFahrenheit {
+				log.WithFields(log.Fields{"deviceID": deviceID, "value": value, "fahrenheit": fahrenheit, "hostname": hostname}).Info("Value read from device")
+			} else {
+				log.WithFields(log.Fields{"deviceID": deviceID, "value": value, "hostname": hostname}).Info("Value read from device")
+			}
+
 			onewireTemperatureC.With(prometheus.Labels{"device_id": deviceID, "hostname": hostname}).Set(value)
+			if *enableFahrenheit {
+				onewireTemperatureF.With(prometheus.Labels{"device_id": deviceID, "hostname": hostname}).Set(fahrenheit)
+			}
+
 			sensors[index] = sensor{SensorID: deviceID, SensorType: "temperature", SensorValue: value}
 			index++
 		}
