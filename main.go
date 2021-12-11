@@ -116,7 +116,7 @@ func observeOnewireTemperature() {
 
 func readOnewireDevicePayload(deviceID string) (float64, error) {
 	devicePayloadFile := fmt.Sprintf("%s%s/w1_slave", onewireDevicePath, deviceID)
-	re := regexp.MustCompile(`(?s).*YES.*t=([0-9]+)`)
+	re := regexp.MustCompile(`(?s).*YES.*t=(-?[0-9]+)`)
 
 	for retries := 0; retries < 5; retries++ {
 		buffer, err := ioutil.ReadFile(devicePayloadFile)
